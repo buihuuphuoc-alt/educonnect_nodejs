@@ -49,7 +49,7 @@ EduConnect là một ứng dụng web học trực tuyến (e-learning) xây d�
 | Runtime | Node.js |
 | Web framework | Express.js 4 |
 | Template engine | Nunjucks 3 |
-| Cơ sở dữ liệu | MySQL 8 (mysql2) |
+| Cơ sở dữ liệu | MySQL Workbench 8.0 CE |
 | Session store | express-mysql-session |
 | Xác thực mật khẩu | bcryptjs |
 | Upload file | Multer |
