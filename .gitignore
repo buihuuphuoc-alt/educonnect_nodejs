@@ -1,0 +1,10 @@
+node_modules/
+sessions/
+.env
+*.log
+*.db-shm
+*.db-wal
+elearning.db
+public/images/courses/
+public/courses/
+ngrok-v3-stable-windows-amd64/
