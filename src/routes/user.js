@@ -547,7 +547,6 @@ router.get('/doi-mat-khau', (req, res) => {
 });
 
 router.post('/doi-mat-khau', loginRequired, async (req, res) => {
-  const bcrypt      = require('bcryptjs');
   const new_password = (req.body.new_password || '').trim();
   const confirm      = (req.body.confirm_password || '').trim();
   if (!new_password || new_password.length < 6)
@@ -555,7 +554,7 @@ router.post('/doi-mat-khau', loginRequired, async (req, res) => {
   if (new_password !== confirm)
     return res.json({ success: false, message: 'Mật khẩu xác nhận không khớp.' });
   await run('UPDATE users SET password=?, must_change_password=0 WHERE id=?',
-    [bcrypt.hashSync(new_password, 10), req.session.user_id]);
+    [new_password, req.session.user_id]);
   res.json({ success: true, message: 'Đổi mật khẩu thành công!', redirect: '/' });
 });
 
