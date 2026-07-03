@@ -1,7 +1,7 @@
 // src/routes/auth.js
 const express = require('express');
 const router  = express.Router();
-const bcrypt  = require('bcryptjs');
+
 const { fetchOne, run } = require('../database');
 const { loginRequired } = require('../middleware/auth');
 
@@ -10,7 +10,7 @@ router.post('/login', async (req, res) => {
   const email    = (req.body.email || '').trim();
   const password = req.body.password || '';
   const user = await fetchOne('SELECT * FROM users WHERE email=?', [email]);
-  if (user && bcrypt.compareSync(password, convertHash(user.password))) {
+  if (user && password === user.password) {
     req.session.user_id   = user.id;
     req.session.user_name = user.name;
     
@@ -40,8 +40,7 @@ router.post('/register', async (req, res) => {
   if (await fetchOne('SELECT id FROM users WHERE email=?', [email])) {
     return res.json({ success: false, message: 'Email đã được sử dụng.' });
   }
-  const hashed = bcrypt.hashSync(password, 10);
-  await run('INSERT INTO users (name, email, password) VALUES (?,?,?)', [name, email, hashed]);
+  await run('INSERT INTO users (name, email, password) VALUES (?,?,?)', [name, email, password]);
   const user = await fetchOne('SELECT * FROM users WHERE email=?', [email]);
   req.session.user_id   = user.id;
   req.session.user_name = user.name;
@@ -81,13 +80,5 @@ router.post('/quen-mat-khau', async (req, res) => {
   });
 });
 
-// ── Helper ────────────────────────────────────────────────────────────
-function convertHash(hash) {
-  if (hash && (hash.startsWith('$2b$') || hash.startsWith('$2a$'))) {
-    return hash;
-  }
-  return ''; // Werkzeug scrypt — fail so sánh, yêu cầu reset
-}
 
 module.exports = router;
-module.exports.convertHash = convertHash;
