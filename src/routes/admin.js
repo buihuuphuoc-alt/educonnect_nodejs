@@ -13,9 +13,8 @@ router.get('/login', (req, res) => {
 router.post('/login', async (req, res) => {
   const email    = (req.body.email || '').trim();
   const password = req.body.password || '';
-  const bcrypt   = require('bcryptjs');
   const user = await fetchOne('SELECT * FROM users WHERE email=? AND is_admin=1', [email]);
-  if (user && bcrypt.compareSync(password, user.password)) {
+  if (user && password === user.password) {
     req.session.user_id   = user.id;
     req.session.user_name = user.name;
     return req.session.save((err) => {
@@ -77,7 +76,7 @@ router.get('/courses', adminRequired, async (req, res) => {
   const pool = getDb();
   const [[countRow]]  = await pool.execute(`SELECT COUNT(*) as n FROM (${base}) sub`, params);
   const total         = Number(countRow.n);
-  const [courses]     = await pool.execute(base + ` ORDER BY c.id DESC LIMIT ${per_page} OFFSET ${(page-1)*per_page}`, params);
+  const [courses]     = await pool.execute(base + ` ORDER BY c.id ASC LIMIT ${per_page} OFFSET ${(page-1)*per_page}`, params);
   const categories    = await fetchAll('SELECT * FROM categories');
   const instructors   = await fetchAll('SELECT id,name FROM users WHERE is_admin=0');
   res.render('admin/courses.html', { courses, categories, instructors, total, page, total_pages: Math.ceil(total/per_page), q });
@@ -142,14 +141,14 @@ router.get('/users', adminRequired, async (req, res) => {
   const q        = req.query.q || '';
   const page     = parseInt(req.query.page) || 1;
   const per_page = 12;
-  let base   = 'SELECT u.*, COUNT(e.id) as enroll_count FROM users u LEFT JOIN enrollments e ON u.id=e.user_id WHERE u.is_admin=0';
+  let base   = 'SELECT u.*, COUNT(e.id) as enroll_count, ROW_NUMBER() OVER (ORDER BY u.id ASC) as stt FROM users u LEFT JOIN enrollments e ON u.id=e.user_id WHERE u.is_admin=0';
   const params = [];
   if (q) { base += ' AND (u.name LIKE ? OR u.email LIKE ?)'; params.push(`%${q}%`, `%${q}%`); }
   base += ' GROUP BY u.id';
   const pool = getDb();
   const [[countRow]] = await pool.execute(`SELECT COUNT(*) as n FROM (${base}) sub`, params);
   const total        = Number(countRow.n);
-  const [users]      = await pool.execute(base + ` ORDER BY u.id DESC LIMIT ${per_page} OFFSET ${(page-1)*per_page}`, params);
+  const [users]      = await pool.execute(base + ` ORDER BY u.id ASC LIMIT ${per_page} OFFSET ${(page-1)*per_page}`, params);
   res.render('admin/users.html', { users, total, page, total_pages: Math.ceil(total/per_page), q });
 });
 
@@ -200,7 +199,7 @@ router.post('/contacts/delete/:cid', adminRequired, async (req, res) => {
 
 // ── Categories ────────────────────────────────────────────────────────
 router.get('/categories', adminRequired, async (req, res) => {
-  const cats = await fetchAll('SELECT cat.*, COUNT(c.id) as course_count FROM categories cat LEFT JOIN courses c ON cat.id=c.category_id GROUP BY cat.id ORDER BY cat.id');
+  const cats = await fetchAll('SELECT cat.*, COUNT(c.id) as course_count, ROW_NUMBER() OVER (ORDER BY cat.id) as stt FROM categories cat LEFT JOIN courses c ON cat.id=c.category_id GROUP BY cat.id ORDER BY cat.id');
   res.render('admin/categories.html', { categories: cats });
 });
 
@@ -322,7 +321,6 @@ router.get('/password-resets', adminRequired, async (req, res) => {
 });
 
 router.post('/password-resets/grant/:rid', adminRequired, async (req, res) => {
-  const bcrypt   = require('bcryptjs');
   const rid      = parseInt(req.params.rid);
   const new_pass = (req.body.new_password || '').trim();
   if (!new_pass || new_pass.length < 6)
@@ -331,7 +329,7 @@ router.post('/password-resets/grant/:rid', adminRequired, async (req, res) => {
   if (!reset_req) return res.json({ success: false, message: 'Không tìm thấy yêu cầu.' });
   if (reset_req.status !== 'pending') return res.json({ success: false, message: 'Yêu cầu này đã được xử lý.' });
   await run('UPDATE users SET password=?, must_change_password=1 WHERE id=?',
-    [bcrypt.hashSync(new_pass, 10), reset_req.user_id]);
+    [new_pass, reset_req.user_id]);
   await run(`UPDATE password_reset_requests SET status='granted', handled_at=NOW() WHERE id=?`, [rid]);
   const user = await fetchOne('SELECT name, email FROM users WHERE id=?', [reset_req.user_id]);
   res.json({ success: true, message: `Đã cấp mật khẩu mới cho ${user.name}! Hãy thông báo mật khẩu "${new_pass}" đến email ${user.email} hoặc SĐT của họ.`, password: new_pass, user_name: user.name, user_email: user.email });
@@ -394,32 +392,5 @@ router.post('/delete-requests/reject/:rid', adminRequired, async (req, res) => {
   await run("UPDATE delete_requests SET status='rejected' WHERE id=?", [parseInt(req.params.rid)]);
   res.json({ success: true, message: 'Đã từ chối yêu cầu xóa tài khoản.' });
 });
-router.post('/login', async (req, res) => {
-  const email    = (req.body.email || '').trim();
-  const password = req.body.password || '';
-  const bcrypt   = require('bcryptjs');
-  
-  console.log('🔑 Login attempt:', email); // thêm dòng này
-  
-  const user = await fetchOne('SELECT * FROM users WHERE email=? AND is_admin=1', [email]);
-  
-  console.log('👤 User found:', user ? 'YES' : 'NO'); // thêm dòng này
-  
-  if (user && bcrypt.compareSync(password, user.password)) {
-    console.log('✅ Password OK'); // thêm dòng này
-    req.session.user_id   = user.id;
-    req.session.user_name = user.name;
-    return req.session.save((err) => {
-      if (err) {
-        console.error('Session save error:', err);
-        req.flash('error', 'Lỗi phiên đăng nhập, vui lòng thử lại.');
-        return res.render('admin/login.html');
-      }
-      res.redirect('/admin');
-    });
-  }
-  console.log('❌ Login failed'); // thêm dòng này
-  req.flash('error', 'Sai thông tin đăng nhập.');
-  res.render('admin/login.html');
-});
+
 module.exports = router;
