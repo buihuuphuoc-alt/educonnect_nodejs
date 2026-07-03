@@ -233,11 +233,17 @@ function getEndpointName(req) {
 }
 
 // ── Start ─────────────────────────────────────────────────────────────
-initDb().then(() => {
-  app.listen(PORT, () => {
-    console.log(`🎓 EduConnect chạy tại http://localhost:${PORT}`);
-    console.log(`   Admin panel: http://localhost:${PORT}/admin`);
+// Chỉ tự khởi động server khi file này được chạy trực tiếp (node src/app.js).
+// Khi bị require() từ nơi khác (ví dụ file test), KHÔNG tự listen() để
+// tránh lỗi "EADDRINUSE: address already in use" khi nhiều test file
+// cùng require app.js và cùng cố chiếm port 5000.
+if (require.main === module) {
+  initDb().then(() => {
+    app.listen(PORT, () => {
+      console.log(`🎓 EduConnect chạy tại http://localhost:${PORT}`);
+      console.log(`   Admin panel: http://localhost:${PORT}/admin`);
+    });
   });
-});
+}
 
 module.exports = app;
